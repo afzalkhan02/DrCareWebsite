@@ -1,0 +1,333 @@
+ if (@Activity='EDD')
+		begin
+			 If (@ReportType = 'Day')  
+			  BEGIN  
+			   IF (@User=0)    
+				Begin 
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+					  ,um1.name as [Reporting Officer]
+					   from GenericQueuedetails GQD    
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager  
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='EDD'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+					 where cast(TicketAttendedOn as date) between @fromdate and @todate And
+					  TicketStatus='CLOSED' and Um.UserId is not null AND GQD.Queue='EDD'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))   
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end    
+			   ELSE    
+				Begin    
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls],
+					  
+					  um1.name as [Reporting Officer]
+					  from GenericQueuedetails GQD 
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager     
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='EDD'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID    
+					  where cast(TicketAttendedOn as date) between @fromdate and @todate And TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='EDD'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))    
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end   
+			   END  
+			   ELSE  
+			   BEGIN  
+			  If(@ReportType = 'Consolidated')  
+			  BEGIN  
+			   IF(@User=0)    
+			   BEGIN    
+				 Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				 , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] ,  
+				 dbo.ConvertTimeToHHMMSS(sum([ACHT(hh:mm:ss)])) as [ACHT(hh:mm:ss)],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)],
+				 sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				from      (  
+				 select   
+				 CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				 TicketAttandedBy as [User ID],  
+				 um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				 sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				 (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				 sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				 sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+				 ,um1.name as [Reporting Officer]
+				  from GenericQueueDetails GQD    
+				 left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+				 left join UmUserMaster um1 on um1.Id=um.ReportingManager
+				 left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				 left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='EDD'    
+				 left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID     
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And
+				   TicketStatus='CLOSED' and um.UserId is not null AND GQD.Queue='EDD'
+				 group by CONVERT(varchar(10),TicketAttendedOn,103) ,um1.name, um.Name,TicketAttandedBy   
+          
+				) as p group by [User ID],Name ,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+			   END  
+				ELSE    
+				 BEGIN  
+				  Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				  , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],    
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] , 
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)],
+				  sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				 from 
+				 (  
+				  select   
+				  CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				  TicketAttandedBy as [User ID],  
+				  um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				  sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				  (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				  sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				  sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls] ,um1.name as [Reporting Officer] from GenericQueuedetails GQD    
+				  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy   
+				  left join UmUserMaster um1 on um1.Id=um.ReportingManager 
+				  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='EDD'    
+				  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And   
+				  TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='EDD'
+				  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name, um.Name,TicketAttandedBy            
+				 ) as p group by [User ID],Name,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+				END  
+				 END   
+		END   
+   END
+
+
+
+
+
+   if (@Activity='STPL')
+		begin
+			 If (@ReportType = 'Day')  
+			  BEGIN  
+			   IF (@User=0)    
+				Begin 
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+					  ,um1.name as [Reporting Officer]
+					   from GenericQueuedetails GQD    
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager  
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='STPL'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+					 where cast(TicketAttendedOn as date) between @fromdate and @todate And
+					  TicketStatus='CLOSED' and Um.UserId is not null AND GQD.Queue='STPL'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))   
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end    
+			   ELSE    
+				Begin    
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls],
+					  
+					  um1.name as [Reporting Officer]
+					  from GenericQueuedetails GQD 
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager     
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='STPL'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID    
+					  where cast(TicketAttendedOn as date) between @fromdate and @todate And TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='STPL'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))    
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end   
+			   END  
+			   ELSE  
+			   BEGIN  
+			  If(@ReportType = 'Consolidated')  
+			  BEGIN  
+			   IF(@User=0)    
+			   BEGIN    
+				 Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				 , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] ,  
+				 dbo.ConvertTimeToHHMMSS(sum([ACHT(hh:mm:ss)])) as [ACHT(hh:mm:ss)],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)],
+				 sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				from      (  
+				 select   
+				 CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				 TicketAttandedBy as [User ID],  
+				 um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				 sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				 (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				 sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				 sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+				 ,um1.name as [Reporting Officer]
+				  from GenericQueueDetails GQD    
+				 left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+				 left join UmUserMaster um1 on um1.Id=um.ReportingManager
+				 left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				 left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='STPL'    
+				 left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID     
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And
+				   TicketStatus='CLOSED' 
+				  and um.UserId is not null AND GQD.Queue='STPL'
+				 group by CONVERT(varchar(10),TicketAttendedOn,103) ,um1.name, um.Name,TicketAttandedBy   
+          
+				) as p group by [User ID],Name ,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+			   END  
+				ELSE    
+				 BEGIN  
+				  Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				  , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],    
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] , 
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)], 
+				  sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				 from 
+				 (  
+				  select   
+				  CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				  TicketAttandedBy as [User ID],  
+				  um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				  sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				  (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				  sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				  sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls] ,um1.name as [Reporting Officer] from GenericQueuedetails GQD    
+				  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy   
+				  left join UmUserMaster um1 on um1.Id=um.ReportingManager 
+				  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='STPL'    
+				  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And   
+				  TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='STPL'
+				  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name, um.Name,TicketAttandedBy            
+				 ) as p group by [User ID],Name,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+				END  
+				 END   
+		END   
+   END
+
+
+
+
+   if (@Activity='DOB MISMATCH')
+		begin
+			 If (@ReportType = 'Day')  
+			  BEGIN  
+			   IF (@User=0)    
+				Begin 
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+					  ,um1.name as [Reporting Officer]
+					   from GenericQueuedetails GQD    
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager  
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='DOB MISMATCH'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+					 where cast(TicketAttendedOn as date) between @fromdate and @todate And
+					  TicketStatus='CLOSED' and Um.UserId is not null AND GQD.Queue='DOB MISMATCH'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))   
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end    
+			   ELSE    
+				Begin    
+					  select * from (   
+					  select CONVERT(varchar(10),TicketAttendedOn,103) as [Date],TicketAttandedBy as [User ID],um.Name, count(*) as [Total Calls],dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0)) as [Total CRM Login Time],
+					  dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))) as [Total Time(hh:mm:ss)],
+					  (case when count(*)>0 then dbo.ConvertTimeToHHMMSS(sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*)) end) [ACHT(hh:mm:ss)],sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls],
+					  
+					  um1.name as [Reporting Officer]
+					  from GenericQueuedetails GQD 
+					  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy
+					  left join UmUserMaster um1 on um1.Id=um.ReportingManager     
+					  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)  
+					  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='DOB MISMATCH'    
+					  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID    
+					  where cast(TicketAttendedOn as date) between @fromdate and @todate And TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='DOB MISMATCH'
+					  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name,um.Name,TicketAttandedBy,dbo.ConvertTimeToHHMMSS(isnull(UDLS.TotalLoginTime,0))    
+					  ) a where ISNULL([Total Time(hh:mm:ss)],'') <> '' order by Name,Date
+				end   
+			   END  
+			   ELSE  
+			   BEGIN  
+			  If(@ReportType = 'Consolidated')  
+			  BEGIN  
+			   IF(@User=0)    
+			   BEGIN    
+				 Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				 , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] ,  
+				 dbo.ConvertTimeToHHMMSS(sum([ACHT(hh:mm:ss)])) as [ACHT(hh:mm:ss)],  
+				 dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)],
+				 sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				from      (  
+				 select   
+				 CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				 TicketAttandedBy as [User ID],  
+				 um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				 sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				 (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				 sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				 sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls]
+				 ,um1.name as [Reporting Officer]
+				  from GenericQueueDetails GQD    
+				 left join UmUserMaster um on um.Id=GQD.TicketAttandedBy  
+				 left join UmUserMaster um1 on um1.Id=um.ReportingManager
+				 left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				 left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='DOB MISMATCH'    
+				 left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID     
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And
+				   TicketStatus='CLOSED' 
+				  and um.UserId is not null AND GQD.Queue='DOB MISMATCH'
+				 group by CONVERT(varchar(10),TicketAttendedOn,103) ,um1.name, um.Name,TicketAttandedBy   
+          
+				) as p group by [User ID],Name ,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+			   END  
+				ELSE    
+				 BEGIN  
+				  Select max([Date])as [Date],[User ID],Name,sum([Total Calls]) as [Total Calls]
+				  , dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime]) as [Total CRM Login Time],    
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])) as [Total Time(hh:mm:ss)] , 
+				  dbo.ConvertTimeToHHMMSS(sum([Total Time(hh:mm:ss)])/sum([Total Calls])) as [ACHT(hh:mm:ss)], 
+				  --dbo.ConvertTimeToHHMMSS(sum([ACHT(hh:mm:ss)])) as [ACHT(hh:mm:ss)],  
+				  sum([Answered Calls]) as [Answered Calls],sum([Un-Answered Calls]) as [Un-Answered Calls],sum([Closed Calls])  as [Closed Calls]  
+				,[Reporting Officer]
+				 from 
+				 (  
+				  select   
+				  CONVERT(varchar(10),TicketAttendedOn,103) as [Date],  
+				  TicketAttandedBy as [User ID],  
+				  um.Name as Name, count(*) as [Total Calls],  sum(isnull(UDLS.TotalLoginTime,0)) as [TotalCRMLoginTime],  
+				  sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end))) as [Total Time(hh:mm:ss)],  
+				  (case when count(*)>0 then sum(DATEDIFF(S,CallStartTime,(case when CallEndTime < CallStartTime then CallStartTime else CallEndTime end)))/count(*) end) [ACHT(hh:mm:ss)],  
+				  sum(case when (mDM.NC='N') then 1 else 0 end) as [Answered Calls],sum(case when (mDM.NC='Y') then 1 else 0 end) as [Un-Answered Calls],  
+				  sum(case when (GBD.QueueStatus in ('CLOSED','Credit Hold')) then 1 else 0 end) as [Closed Calls] ,um1.name as [Reporting Officer] from GenericQueuedetails GQD    
+				  left join UmUserMaster um on um.Id=GQD.TicketAttandedBy   
+				  left join UmUserMaster um1 on um1.Id=um.ReportingManager 
+				  left join userdayloginsummary UDLS on UDLS.UserId=GQD.TicketAttandedBy and UDLS.daydate=cast(TicketAttendedOn as date)    
+				  left join msDispositionMaster mDM on mDM.DispositionCategory=GQD.Disposition and mDM.BucketNo='1' and mDM.VerificationType='DOB MISMATCH'    
+				  left join GenericBaseData GBD on GBD.Id=GQD.BaseId and GBD.LastTicketNo=GQD.TicketID   
+				  where cast(TicketAttendedOn as date) between @fromdate and @todate And   
+				  TicketStatus='CLOSED' and TicketAttandedBy=@User AND GQD.Queue='DOB MISMATCH'
+				  group by CONVERT(varchar(10),TicketAttendedOn,103),um1.name, um.Name,TicketAttandedBy            
+				 ) as p group by [User ID],Name,[Reporting Officer],dbo.ConvertTimeToHHMMSS([TotalCRMLoginTime])
+				END  
+				 END   
+		END   
+   END
